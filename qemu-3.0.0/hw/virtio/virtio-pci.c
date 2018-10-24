@@ -2645,6 +2645,49 @@ static const TypeInfo virtio_host_pci_info = {
 };
 #endif
 
+/* virtio-mini-pci */
+
+static void virtio_mini_pci_realize(VirtIOPCIProxy *vpci_dev, Error **errp) {
+    VirtIOMiniPCI *vmini = VIRTIO_MINI_PCI(vpci_dev);
+    DeviceState *vdev = DEVICE(&vmini->vdev);
+    Error *err = NULL;
+
+    qdev_set_parent_bus(vdev, BUS(&vpci_dev->bus));
+    object_property_set_bool(OBJECT(vdev), true, "realized", &err);
+    if(err) {
+        error_propagate(errp, err);
+        return;
+    }
+}
+
+static void virtio_mini_pci_class_init(ObjectClass *klass, void *data) {
+    DeviceClass *dc = DEVICE_CLASS(klass);
+    VirtioPCIClass *k = VIRTIO_PCI_CLASS(klass);
+    PCIDeviceClass *pcidev_k = PCI_DEVICE_CLASS(klass);
+
+    k->realize = virtio_mini_pci_realize;
+    set_bit(DEVICE_CATEGORY_MISC, dc->categories);
+
+    pcidev_k->vendor_id = PCI_VENDOR_ID_REDHAT_QUMRANET;
+    pcidev_k->device_id = PCI_DEVICE_ID_VIRTIO_MINI;
+    pcidev_k->revision = VIRTIO_PCI_ABI_VERSION;
+    pcidev_k->class_id = PCI_CLASS_OTHERS;
+}
+
+static void virtio_mini_initfn(Object *obj) {
+    VirtIOMiniPCI *dev = VIRTIO_MINI_PCI(obj);
+    virtio_instance_init_common(obj, &dev->vdev, sizeof(dev->vdev), 
+                                TYPE_VIRTIO_MINI);
+}
+
+static const TypeInfo virtio_mini_pci_info = {
+    .name = TYPE_VIRTIO_MINI_PCI,
+    .parent = TYPE_VIRTIO_PCI,
+    .instance_size = sizeof(VirtIOMiniPCI),
+    .instance_init = virtio_mini_initfn,
+    .class_init = virtio_mini_pci_class_init,
+};
+
 /* virtio-pci-bus */
 
 static void virtio_pci_bus_new(VirtioBusState *bus, size_t bus_size,
@@ -2723,6 +2766,7 @@ static void virtio_pci_register_types(void)
 #ifdef CONFIG_VHOST_VSOCK
     type_register_static(&vhost_vsock_pci_info);
 #endif
+    type_register_static(&virtio_mini_pci_info);
 }
 
 type_init(virtio_pci_register_types)
