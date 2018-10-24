@@ -1,4 +1,3 @@
-#include <linux/init.h>
 #include <linux/module.h>
 #include <linux/virtio.h>
 #include <linux/virtio_ids.h>
@@ -37,19 +36,7 @@ static struct virtio_driver driver_virtio_mini = {
     .remove = remove_virtio_mini
 };
 
-static int __init init_virtio_mini(void) {
-    int error = register_virtio_driver(&driver_virtio_mini);
-    if(error) {
-        printk(KERN_INFO "virtio_mini Error: error %i", error);
-        return -1;
-    }
-    printk(KERN_INFO "virtio_mini module initialized\n");
-    return 0;
-}
-
-static void __exit exit_virtio_mini(void) {
-    printk(KERN_INFO "virtio_mini module removed\n");
-}
-
-module_init(init_virtio_mini);
-module_exit(exit_virtio_mini);
+/* We don't do anything special at init/exit
+ * this replaces module_init()/module_exit() 
+ */
+module_virtio_driver(driver_virtio_mini);
