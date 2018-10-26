@@ -1,6 +1,7 @@
 #include <linux/module.h>
 #include <linux/virtio.h>
 #include <linux/virtio_ids.h>
+#include <linux/virtio_config.h>
 
 #ifndef VIRTIO_ID_MINI
 #define VIRTIO_ID_MINI 21
@@ -17,13 +18,33 @@ static struct virtio_device_id id_table[] = {
 
 static unsigned int feature_table[] = { };
 
+struct virtio_mini_info {
+    struct virtqueue *vq;
+};
+
+void virtio_mini_vq_callback(struct virtqueue *vq) {
+    printk(KERN_INFO "callback !\n");
+}
+
 int probe_virtio_mini(struct virtio_device *dev) {
+    struct virtio_mini_info *vmini;
+    
     printk(KERN_INFO "virtio-mini device found\n");
+    vmini = kzalloc(sizeof(struct virtio_mini_info), GFP_KERNEL);
+    if(vmini == NULL) {
+        return ENOMEM;
+    }
+    vmini->vq = virtio_find_single_vq(dev, virtio_mini_vq_callback, "mini-queue");
+    if(vmini->vq) {
+        printk(KERN_INFO "virtualqueue assigned: %s\n", vmini->vq->name);
+    }
+    dev->priv = vmini;
     return 0;
 }
 
 void remove_virtio_mini (struct virtio_device *dev) {
     printk(KERN_INFO "virtio-mini device removed\n");
+    kfree(dev->priv);
 }
 
 static struct virtio_driver driver_virtio_mini = {

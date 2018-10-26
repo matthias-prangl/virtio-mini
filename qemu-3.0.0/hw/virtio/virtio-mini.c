@@ -4,16 +4,6 @@
 #include "hw/virtio/virtio-mini.h"
 #include "standard-headers/linux/virtio_ids.h"
 
-static const VMStateDescription vmstate_virtio_mini = {
-    .name = "virtio-mini",
-    .minimum_version_id = 1,
-    .version_id = 1,
-    .fields = (VMStateField[]) {
-        VMSTATE_VIRTIO_DEVICE,
-        VMSTATE_END_OF_LIST()
-    }
-};
-
 static uint64_t virtio_mini_get_features(VirtIODevice *vdev, uint64_t f, Error **errp)
 {
     return f;
@@ -27,20 +17,27 @@ static void virtio_mini_set_status(VirtIODevice *vdev, uint8_t status)
     vdev->status = status;
 }
 
+
+static void virtio_mini_handle_output(VirtIODevice *vdev, VirtQueue *vq) {
+    /* do nothing */
+}
+
 static void virtio_mini_device_realize(DeviceState *dev, Error **errp) {
     VirtIODevice *vdev = VIRTIO_DEVICE(dev);
+    VirtIOMini *vmin = VIRTIO_MINI(dev);
     virtio_init(vdev, "virtio-mini", VIRTIO_ID_MINI, 0);
+    vmin->vq = virtio_add_queue(vdev, 8, virtio_mini_handle_output);
 }
 
 static void virtio_mini_device_unrealize(DeviceState *dev, Error **errp) {
-
+    VirtIODevice *vdev = VIRTIO_DEVICE(dev);
+    virtio_cleanup(vdev);
 }
 
 static void virtio_mini_class_init(ObjectClass *klass, void *data) {
     DeviceClass *dc = DEVICE_CLASS(klass);
     VirtioDeviceClass *vdc = VIRTIO_DEVICE_CLASS(klass);
 
-    dc->vmsd = &vmstate_virtio_mini;
     set_bit(DEVICE_CATEGORY_MISC, dc->categories);
     vdc->realize = virtio_mini_device_realize;
     vdc->unrealize = virtio_mini_device_unrealize;
