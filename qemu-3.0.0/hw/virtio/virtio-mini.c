@@ -17,6 +17,9 @@ static void virtio_mini_set_status(VirtIODevice *vdev, uint8_t status)
     vdev->status = status;
 }
 
+static void virtio_mini_handle_input(VirtIODevice *vdev, VirtQueue *vq) {
+    /* do nothing */
+}
 
 static void virtio_mini_handle_output(VirtIODevice *vdev, VirtQueue *vq) {
     /* do nothing */
@@ -26,7 +29,8 @@ static void virtio_mini_device_realize(DeviceState *dev, Error **errp) {
     VirtIODevice *vdev = VIRTIO_DEVICE(dev);
     VirtIOMini *vmin = VIRTIO_MINI(dev);
     virtio_init(vdev, "virtio-mini", VIRTIO_ID_MINI, 0);
-    vmin->vq = virtio_add_queue(vdev, 8, virtio_mini_handle_output);
+    vmin->vq_tx = virtio_add_queue(vdev, 8, virtio_mini_handle_input);
+    vmin->vq_rx = virtio_add_queue(vdev, 8, virtio_mini_handle_output);
 }
 
 static void virtio_mini_device_unrealize(DeviceState *dev, Error **errp) {

@@ -9,7 +9,8 @@
 
 typedef struct VirtIOMini {
     VirtIODevice parent_obj;
-    VirtQueue *vq;
+    VirtQueue *vq_tx;
+    VirtQueue *vq_rx;
 } VirtIOMini;
 
 #endif 

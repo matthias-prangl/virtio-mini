@@ -18,33 +18,72 @@ static struct virtio_device_id id_table[] = {
 
 static unsigned int feature_table[] = { };
 
-struct virtio_mini_info {
-    struct virtqueue *vq;
+struct virtio_mini_device {
+    /* receiving virtqueue */
+    struct virtqueue *vq_rx;
+    /* transmitting virtqueue */
+    struct virtqueue *vq_tx;
+    /* related virtio_device */
+    struct virtio_device *vdev;
 };
 
-void virtio_mini_vq_callback(struct virtqueue *vq) {
-    printk(KERN_INFO "callback !\n");
+void virtio_mini_vq_tx_cb(struct virtqueue *vq) {
+    printk(KERN_INFO "tx callback !\n");
 }
 
-int probe_virtio_mini(struct virtio_device *dev) {
-    struct virtio_mini_info *vmini;
-    
-    printk(KERN_INFO "virtio-mini device found\n");
-    vmini = kzalloc(sizeof(struct virtio_mini_info), GFP_KERNEL);
-    if(vmini == NULL) {
-        return ENOMEM;
+void virtio_mini_vq_rx_cb(struct virtqueue *vq) {
+    printk(KERN_INFO "rx callback !\n");
+}
+
+int virtio_mini_assign_virtqueue(struct virtio_mini_device *vmini) {
+    const char *names[] = { "virtio-mini-tx", "virtio-mini-rx" };
+    vq_callback_t *callbacks[] = { virtio_mini_vq_tx_cb, virtio_mini_vq_rx_cb };
+    struct virtqueue *vqs[2];
+    int err;
+
+    err = virtio_find_vqs(vmini->vdev, 2, vqs, callbacks, names, NULL);
+    if(err) {
+        return err;
     }
-    vmini->vq = virtio_find_single_vq(dev, virtio_mini_vq_callback, "mini-queue");
-    if(vmini->vq) {
-        printk(KERN_INFO "virtualqueue assigned: %s\n", vmini->vq->name);
-    }
-    dev->priv = vmini;
+    vmini->vq_tx = vqs[0];
+    vmini->vq_rx = vqs[1];
     return 0;
 }
 
-void remove_virtio_mini (struct virtio_device *dev) {
+int probe_virtio_mini(struct virtio_device *vdev) {
+    struct virtio_mini_device *vmini;
+    int err;
+
+    printk(KERN_INFO "virtio-mini device found\n");
+
+    vmini = kzalloc(sizeof(struct virtio_mini_device), GFP_KERNEL);
+    if(vmini == NULL) {
+        err = ENOMEM;
+        goto err;
+    }
+    vdev->priv = vmini;
+    vmini->vdev = vdev;
+
+    err = virtio_mini_assign_virtqueue(vmini);
+    if(err) {
+        printk(KERN_INFO "Error adding virtqueue\n");
+        goto err;
+    }
+    printk(KERN_INFO "tx queue: %s \t rx queue: %s\n", 
+        vmini->vq_tx->name, vmini->vq_rx->name);
+    
+    return 0;
+
+    err:
+    kfree(vmini);
+    return err;
+}
+
+void remove_virtio_mini (struct virtio_device *vdev) {
     printk(KERN_INFO "virtio-mini device removed\n");
-    kfree(dev->priv);
+    vdev->config->reset(vdev);
+    vdev->config->del_vqs(vdev);
+    kfree(vdev->priv);
 }
 
 static struct virtio_driver driver_virtio_mini = {
