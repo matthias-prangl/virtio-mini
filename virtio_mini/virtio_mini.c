@@ -1,43 +1,41 @@
 #include <linux/module.h>
-#include <linux/virtio.h>
-#include <linux/virtio_ids.h>
+#include <linux/scatterlist.h>
 #include <linux/virtio_config.h>
+#include "virtio_mini.h"
 
-#ifndef VIRTIO_ID_MINI
-#define VIRTIO_ID_MINI 21
-#endif
+static int virtio_mini_open(struct inode *inode, struct  file *file) {
+    char *buf;
+    const char hi_guest[] = "hello host!";
+    struct scatterlist sg;
+    struct virtio_mini_device *vmini = PDE_DATA(inode);
+    
+    buf = kmalloc(sizeof(hi_guest), GFP_KERNEL);
+    if(!buf) {
+        return 1;
+    }
+    strcpy(buf, hi_guest);
+    sg_init_one(&sg, buf, sizeof(hi_guest));
 
-MODULE_AUTHOR("Matthias Prangl");
-MODULE_DESCRIPTION("virtio example front-end driver");
-MODULE_LICENSE("GPL v2");
-
-static struct virtio_device_id id_table[] = {
-	{ VIRTIO_ID_MINI, VIRTIO_DEV_ANY_ID },
-	{ 0 },
-};
-
-static unsigned int feature_table[] = { };
-
-struct virtio_mini_device {
-    /* receiving virtqueue */
-    struct virtqueue *vq_rx;
-    /* transmitting virtqueue */
-    struct virtqueue *vq_tx;
-    /* related virtio_device */
-    struct virtio_device *vdev;
-};
-
-void virtio_mini_vq_tx_cb(struct virtqueue *vq) {
-    printk(KERN_INFO "tx callback !\n");
+    virtqueue_add_outbuf(vmini->vq_tx, &sg, 1, buf, GFP_KERNEL);
+    virtqueue_kick(vmini->vq_tx);
+    return 0;
 }
 
-void virtio_mini_vq_rx_cb(struct virtqueue *vq) {
-    printk(KERN_INFO "rx callback !\n");
+/* we just clear the buffer for now */
+void virtio_mini_outbuf_cb(struct virtqueue *vq) {
+    int len;
+    virtqueue_get_buf(vq, &len);
+    printk(KERN_INFO "outbuf callback!\n");
 }
 
+void virtio_mini_inbuf_cb(struct virtqueue *vq) {
+    printk(KERN_INFO "inbuf callback!\n");
+}
+
+/* assign one virtqueue for transmitting and one for receiving data */
 int virtio_mini_assign_virtqueue(struct virtio_mini_device *vmini) {
     const char *names[] = { "virtio-mini-tx", "virtio-mini-rx" };
-    vq_callback_t *callbacks[] = { virtio_mini_vq_tx_cb, virtio_mini_vq_rx_cb };
+    vq_callback_t *callbacks[] = { virtio_mini_outbuf_cb, virtio_mini_inbuf_cb };
     struct virtqueue *vqs[2];
     int err;
 
@@ -52,8 +50,9 @@ int virtio_mini_assign_virtqueue(struct virtio_mini_device *vmini) {
 
 int probe_virtio_mini(struct virtio_device *vdev) {
     struct virtio_mini_device *vmini;
+    /* virtio-mini(12) + bus index (7) */
+    char proc_name[20];
     int err;
-
     printk(KERN_INFO "virtio-mini device found\n");
 
     vmini = kzalloc(sizeof(struct virtio_mini_device), GFP_KERNEL);
@@ -61,17 +60,27 @@ int probe_virtio_mini(struct virtio_device *vdev) {
         err = ENOMEM;
         goto err;
     }
+
+    /* make it possible to access underlying virtio_device 
+    from virtio_mini_device and vice versa */
     vdev->priv = vmini;
     vmini->vdev = vdev;
-
     err = virtio_mini_assign_virtqueue(vmini);
     if(err) {
         printk(KERN_INFO "Error adding virtqueue\n");
         goto err;
     }
-    printk(KERN_INFO "tx queue: %s \t rx queue: %s\n", 
-        vmini->vq_tx->name, vmini->vq_rx->name);
-    
+
+    /* create a proc entry named "virtio-mini-<bus_idx>" 
+    proc_dir_entry data pointer points to associated virtio_mini_device 
+    allows access to virtqueues from defined file_operations functions */
+    snprintf(proc_name, sizeof(proc_name), "%s-%i", VIRTIO_MINI_STRING, vdev->index);
+    vmini->pde = proc_create_data(proc_name, 0, NULL, &pde_fops, vmini);
+    if(!vmini->pde) {
+        printk(KERN_INFO "Error creating proc entry");
+        goto err;
+    }
+
     return 0;
 
     err:
@@ -80,23 +89,19 @@ int probe_virtio_mini(struct virtio_device *vdev) {
 }
 
 void remove_virtio_mini (struct virtio_device *vdev) {
-    printk(KERN_INFO "virtio-mini device removed\n");
+    struct virtio_mini_device *vmini = vdev->priv;
+    proc_remove(vmini->pde);
     vdev->config->reset(vdev);
     vdev->config->del_vqs(vdev);
     kfree(vdev->priv);
+    printk(KERN_INFO "virtio-mini device removed\n");
 }
-
-static struct virtio_driver driver_virtio_mini = {
-    .driver.name = KBUILD_MODNAME,
-    .driver.owner = THIS_MODULE,
-    .id_table = id_table,
-    .feature_table = feature_table,
-    .feature_table_size = ARRAY_SIZE(feature_table),
-    .probe = probe_virtio_mini,
-    .remove = remove_virtio_mini
-};
 
 /* We don't do anything special at init/exit
  * this replaces module_init()/module_exit() 
  */
 module_virtio_driver(driver_virtio_mini);
+
+MODULE_AUTHOR("Matthias Prangl");
+MODULE_DESCRIPTION("virtio example front-end driver");
+MODULE_LICENSE("GPL v2");

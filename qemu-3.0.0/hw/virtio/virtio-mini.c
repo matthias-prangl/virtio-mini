@@ -2,7 +2,18 @@
 #include "hw/hw.h"
 #include "hw/virtio/virtio.h"
 #include "hw/virtio/virtio-mini.h"
+#include "qemu/iov.h"
+#include "qemu/error-report.h"
 #include "standard-headers/linux/virtio_ids.h"
+
+void GCC_FMT_ATTR(1, 2) virtio_mini_print(const char *fmt, ...)
+{
+    va_list ap;
+
+    va_start(ap, fmt);
+    error_vreport(fmt, ap);
+    va_end(ap);
+}
 
 static uint64_t virtio_mini_get_features(VirtIODevice *vdev, uint64_t f, Error **errp)
 {
@@ -17,20 +28,42 @@ static void virtio_mini_set_status(VirtIODevice *vdev, uint8_t status)
     vdev->status = status;
 }
 
-static void virtio_mini_handle_input(VirtIODevice *vdev, VirtQueue *vq) {
-    /* do nothing */
+/* callback for receiving virtqueue (outbuf on guest) */
+static void virtio_mini_handle_outbuf(VirtIODevice *vdev, VirtQueue *vq) {
+    /* acllocation of VirtQueueElement happens in virtqueue_pop call */
+    VirtQueueElement *vqe;
+    char *rx_buf;
+
+    while(!virtio_queue_ready(vq)) {
+        virtio_mini_print("not ready");
+        return;
+    }
+    if (!runstate_check(RUN_STATE_RUNNING)) {
+        virtio_mini_print("not synced");
+        return;
+    }
+
+    vqe = virtqueue_pop(vq, sizeof(VirtQueueElement));
+    rx_buf = malloc(sizeof(char) * vqe->out_sg->iov_len);
+    iov_to_buf(vqe->out_sg, vqe->out_num, 0, rx_buf, vqe->out_sg->iov_len);
+    virtio_mini_print("rx_buf: %s", rx_buf);
+    virtqueue_push(vq, vqe, 0);
+    virtio_notify(vdev, vq);
+    g_free(vqe);
+    return;
 }
 
-static void virtio_mini_handle_output(VirtIODevice *vdev, VirtQueue *vq) {
-    /* do nothing */
+/* callback for transmitting virtqueue (inbuf on guest) */
+static void virtio_mini_handle_inbuf(VirtIODevice *vdev, VirtQueue *vq) {
+    return;
 }
 
 static void virtio_mini_device_realize(DeviceState *dev, Error **errp) {
     VirtIODevice *vdev = VIRTIO_DEVICE(dev);
     VirtIOMini *vmin = VIRTIO_MINI(dev);
     virtio_init(vdev, "virtio-mini", VIRTIO_ID_MINI, 0);
-    vmin->vq_tx = virtio_add_queue(vdev, 8, virtio_mini_handle_input);
-    vmin->vq_rx = virtio_add_queue(vdev, 8, virtio_mini_handle_output);
+    vmin->vq_rx = virtio_add_queue(vdev, 8, virtio_mini_handle_outbuf);
+    vmin->vq_tx = virtio_add_queue(vdev, 8, virtio_mini_handle_inbuf);
 }
 
 static void virtio_mini_device_unrealize(DeviceState *dev, Error **errp) {

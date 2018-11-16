@@ -7,6 +7,8 @@
 #define VIRTIO_MINI(obj) \
         OBJECT_CHECK(VirtIOMini, (obj), TYPE_VIRTIO_MINI)
 
+void virtio_mini_print(const char *fmt, ...) GCC_FMT_ATTR(1, 2);
+
 typedef struct VirtIOMini {
     VirtIODevice parent_obj;
     VirtQueue *vq_tx;
