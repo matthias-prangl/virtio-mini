@@ -15,21 +15,37 @@ static int virtio_mini_open(struct inode *inode, struct  file *file) {
     }
     strcpy(buf, hi_guest);
     sg_init_one(&sg, buf, sizeof(hi_guest));
-
+    vmini->prev_len = sizeof(hi_guest);
     virtqueue_add_outbuf(vmini->vq_tx, &sg, 1, buf, GFP_KERNEL);
     virtqueue_kick(vmini->vq_tx);
     return 0;
 }
 
-/* we just clear the buffer for now */
+/* host has acknowledged the message; prepare a buffer to receive */
 void virtio_mini_outbuf_cb(struct virtqueue *vq) {
+    char *buf; 
+    struct scatterlist sg;
+    struct virtio_mini_device *vmini = vq->vdev->priv;
     int len;
     virtqueue_get_buf(vq, &len);
-    printk(KERN_INFO "outbuf callback!\n");
+    /* allow the host to send a message of the message he received */
+    buf = kzalloc(vmini->prev_len, GFP_KERNEL);
+    if(!buf) {
+        return;
+    }
+    sg_init_one(&sg, buf, vmini->prev_len);
+    virtqueue_add_inbuf(vmini->vq_rx, &sg, 1, buf, GFP_KERNEL);
+    virtqueue_kick(vmini->vq_rx);
+    return;
 }
 
 void virtio_mini_inbuf_cb(struct virtqueue *vq) {
-    printk(KERN_INFO "inbuf callback!\n");
+    int len;
+    char *buf;
+    struct virtio_mini_device *vmini = vq->vdev->priv;
+    buf = kzalloc(sizeof(char) * vmini->prev_len, GFP_KERNEL);
+    buf = virtqueue_get_buf(vq, &len);
+    printk(KERN_INFO "received: %s", buf);
 }
 
 /* assign one virtqueue for transmitting and one for receiving data */

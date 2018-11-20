@@ -46,15 +46,36 @@ static void virtio_mini_handle_outbuf(VirtIODevice *vdev, VirtQueue *vq) {
     vqe = virtqueue_pop(vq, sizeof(VirtQueueElement));
     rx_buf = malloc(sizeof(char) * vqe->out_sg->iov_len);
     iov_to_buf(vqe->out_sg, vqe->out_num, 0, rx_buf, vqe->out_sg->iov_len);
-    virtio_mini_print("rx_buf: %s", rx_buf);
+    virtio_mini_print("received: %s", rx_buf);
+
     virtqueue_push(vq, vqe, 0);
     virtio_notify(vdev, vq);
     g_free(vqe);
     return;
 }
 
+static char tx_msg[] = "hi guest!";
 /* callback for transmitting virtqueue (inbuf on guest) */
 static void virtio_mini_handle_inbuf(VirtIODevice *vdev, VirtQueue *vq) {
+    VirtQueueElement *vqe;
+    char *tx_buf;
+
+    while(!virtio_queue_ready(vq)) {
+        virtio_mini_print("not ready");
+        return;
+    }
+    if (!runstate_check(RUN_STATE_RUNNING)) {
+        virtio_mini_print("not synced");
+        return;
+    }
+
+    vqe = virtqueue_pop(vq, sizeof(VirtQueueElement));
+    tx_buf = malloc(sizeof(char) * vqe->in_sg->iov_len);
+    strcpy(tx_buf, tx_msg);
+    iov_from_buf(vqe->in_sg, vqe->in_num, 0, tx_buf, vqe->in_sg->iov_len);
+    virtqueue_push(vq, vqe, strlen(tx_buf));
+    virtio_notify(vdev, vq);
+    g_free(vqe);
     return;
 }
 

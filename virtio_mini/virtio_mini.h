@@ -27,6 +27,8 @@ struct virtio_mini_device {
     struct virtio_device *vdev;
     /* proc dir entry for this instance of the device */
     struct proc_dir_entry *pde;
+    /* store length of last sent message */
+    unsigned int prev_len;
 };
 
 static int virtio_mini_open(struct inode *inode, struct  file *file);
