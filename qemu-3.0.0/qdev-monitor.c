@@ -65,6 +65,7 @@ static const QDevAlias qdev_alias_table[] = {
     { "virtio-keyboard-ccw", "virtio-keyboard", QEMU_ARCH_S390X },
     { "virtio-keyboard-pci", "virtio-keyboard",
             QEMU_ARCH_ALL & ~QEMU_ARCH_S390X },
+    { "virtio-mini-pci", "virtio-mini", QEMU_ARCH_ALL & ~QEMU_ARCH_S390X },
     { "virtio-mouse-ccw", "virtio-mouse", QEMU_ARCH_S390X },
     { "virtio-mouse-pci", "virtio-mouse", QEMU_ARCH_ALL & ~QEMU_ARCH_S390X },
     { "virtio-net-ccw", "virtio-net", QEMU_ARCH_S390X },
@@ -77,7 +78,6 @@ static const QDevAlias qdev_alias_table[] = {
     { "virtio-serial-pci", "virtio-serial", QEMU_ARCH_ALL & ~QEMU_ARCH_S390X },
     { "virtio-tablet-ccw", "virtio-tablet", QEMU_ARCH_S390X },
     { "virtio-tablet-pci", "virtio-tablet", QEMU_ARCH_ALL & ~QEMU_ARCH_S390X },
-    { "virtio-mini-pci", "virtio-mini", QEMU_ARCH_ALL & ~QEMU_ARCH_S390X },
     { }
 };
 

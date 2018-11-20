@@ -26,7 +26,11 @@
 #include "hw/virtio/virtio-input.h"
 #include "hw/virtio/virtio-gpu.h"
 #include "hw/virtio/virtio-crypto.h"
+
+#ifdef CONFIG_VIRTIO_MINI
 #include "hw/virtio/virtio-mini.h"
+#endif
+
 #include "hw/virtio/vhost-user-scsi.h"
 #if defined(CONFIG_VHOST_USER) && defined(CONFIG_LINUX)
 #include "hw/virtio/vhost-user-blk.h"
@@ -421,6 +425,7 @@ struct VirtIOCryptoPCI {
 
 #endif
 
+#ifdef CONFIG_VIRTIO_MINI
 /*
  *  virtio_mini_pci: This extends VirtioPCIProxy
  */
@@ -433,3 +438,4 @@ struct VirtIOMiniPCI {
     VirtIOPCIProxy parent_obj;
     VirtIOMini vdev;
 };
+#endif

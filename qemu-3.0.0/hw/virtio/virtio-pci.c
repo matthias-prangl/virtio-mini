@@ -2645,6 +2645,7 @@ static const TypeInfo virtio_host_pci_info = {
 };
 #endif
 
+#ifdef CONFIG_VIRTIO_MINI
 /* virtio-mini-pci */
 
 static void virtio_mini_pci_realize(VirtIOPCIProxy *vpci_dev, Error **errp) {
@@ -2687,6 +2688,7 @@ static const TypeInfo virtio_mini_pci_info = {
     .instance_init = virtio_mini_initfn,
     .class_init = virtio_mini_pci_class_init,
 };
+#endif
 
 /* virtio-pci-bus */
 
@@ -2766,7 +2768,9 @@ static void virtio_pci_register_types(void)
 #ifdef CONFIG_VHOST_VSOCK
     type_register_static(&vhost_vsock_pci_info);
 #endif
+#ifdef CONFIG_VIRTIO_MINI
     type_register_static(&virtio_mini_pci_info);
+#endif
 }
 
 type_init(virtio_pci_register_types)
