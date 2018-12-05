@@ -28,10 +28,14 @@ struct virtio_mini_device {
     /* proc dir entry for this instance of the device */
     struct proc_dir_entry *pde;
     /* store length of last sent message */
-    unsigned int prev_len;
+    unsigned int buffers;
+    unsigned int buf_lens[8];
 };
 
 static int virtio_mini_open(struct inode *inode, struct  file *file);
+static ssize_t virtio_mini_read(struct file *fil, char *buf, size_t count, loff_t *offp);
+static ssize_t virtio_mini_write(struct file* fil, const char *buf, size_t count, loff_t *offp);
+
 
 void virtio_mini_vq_tx_cb(struct virtqueue *vq);
 void virtio_mini_vq_rx_cb(struct virtqueue *vq);
@@ -44,6 +48,8 @@ void remove_virtio_mini (struct virtio_device *vdev);
 static struct file_operations pde_fops = {
     .owner = THIS_MODULE,
     .open = virtio_mini_open,
+    .read = virtio_mini_read,
+    .write = virtio_mini_write,
 };
 
 static struct virtio_driver driver_virtio_mini = {

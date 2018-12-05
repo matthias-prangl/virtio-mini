@@ -4,38 +4,57 @@
 #include "virtio_mini.h"
 
 static int virtio_mini_open(struct inode *inode, struct  file *file) {
-    char *buf;
-    const char hi_guest[] = "hello host!";
-    struct scatterlist sg;
     struct virtio_mini_device *vmini = PDE_DATA(inode);
-    
-    buf = kmalloc(sizeof(hi_guest), GFP_KERNEL);
-    if(!buf) {
-        return 1;
-    }
-    strcpy(buf, hi_guest);
-    sg_init_one(&sg, buf, sizeof(hi_guest));
-    vmini->prev_len = sizeof(hi_guest);
-    virtqueue_add_outbuf(vmini->vq_tx, &sg, 1, buf, GFP_KERNEL);
-    virtqueue_kick(vmini->vq_tx);
+    file->private_data = vmini;
     return 0;
 }
 
-/* host has acknowledged the message; prepare a buffer to receive */
-void virtio_mini_outbuf_cb(struct virtqueue *vq) {
-    char *buf; 
+static ssize_t virtio_mini_read(struct file *fil, char *buf, size_t count, loff_t *offp) {
+    char *rcv_buf; 
     struct scatterlist sg;
-    struct virtio_mini_device *vmini = vq->vdev->priv;
+    struct virtio_mini_device *vmini = fil->private_data;
+    if(vmini->buffers < 1) {
+        printk(KERN_INFO "no buffers used!");
+        return -1;
+    }
+
+    rcv_buf = kzalloc(vmini->buf_lens[vmini->buffers - 1], GFP_KERNEL);
+    if(!rcv_buf) {
+        return -1;
+    }
+    sg_init_one(&sg, rcv_buf, vmini->buf_lens[vmini->buffers - 1]);
+    virtqueue_add_inbuf(vmini->vq_rx, &sg, 1, rcv_buf, GFP_KERNEL);
+    virtqueue_kick(vmini->vq_rx);
+    return 0;
+}
+
+static ssize_t virtio_mini_write(struct file* fil, const char *buf, size_t count, loff_t *offp) {
+    char *to_send;
+    struct scatterlist sg;
+    struct virtio_mini_device *vmini = fil->private_data;
+    if(vmini->buffers > 8) {
+        printk(KERN_INFO "all buffers used!");
+        return -1;
+    }
+    
+    to_send = kzalloc(count, GFP_KERNEL);
+    if(!to_send) {
+        return 1;
+    }
+    //why is buf[count] not \0?
+    memcpy(to_send, buf, count - 1);
+    sg_init_one(&sg, to_send, count);
+    vmini->buf_lens[vmini->buffers++] = count;
+
+    virtqueue_add_outbuf(vmini->vq_tx, &sg, 1, to_send, GFP_KERNEL);
+    virtqueue_kick(vmini->vq_tx);
+    return count;
+}
+
+/* host has acknowledged the message; consume buffer */
+void virtio_mini_outbuf_cb(struct virtqueue *vq) {
     int len;
     virtqueue_get_buf(vq, &len);
-    /* allow the host to send a message of the message he received */
-    buf = kzalloc(vmini->prev_len, GFP_KERNEL);
-    if(!buf) {
-        return;
-    }
-    sg_init_one(&sg, buf, vmini->prev_len);
-    virtqueue_add_inbuf(vmini->vq_rx, &sg, 1, buf, GFP_KERNEL);
-    virtqueue_kick(vmini->vq_rx);
     return;
 }
 
@@ -43,8 +62,9 @@ void virtio_mini_inbuf_cb(struct virtqueue *vq) {
     int len;
     char *buf;
     struct virtio_mini_device *vmini = vq->vdev->priv;
-    buf = kzalloc(sizeof(char) * vmini->prev_len, GFP_KERNEL);
+    buf = kzalloc(vmini->buf_lens[vmini->buffers - 1], GFP_KERNEL);
     buf = virtqueue_get_buf(vq, &len);
+    vmini->buffers--;
     printk(KERN_INFO "received: %s", buf);
 }
 
@@ -86,12 +106,13 @@ int probe_virtio_mini(struct virtio_device *vdev) {
         printk(KERN_INFO "Error adding virtqueue\n");
         goto err;
     }
+    vmini->buffers = 0;
 
     /* create a proc entry named "virtio-mini-<bus_idx>" 
     proc_dir_entry data pointer points to associated virtio_mini_device 
     allows access to virtqueues from defined file_operations functions */
     snprintf(proc_name, sizeof(proc_name), "%s-%i", VIRTIO_MINI_STRING, vdev->index);
-    vmini->pde = proc_create_data(proc_name, 0, NULL, &pde_fops, vmini);
+    vmini->pde = proc_create_data(proc_name, 0644, NULL, &pde_fops, vmini);
     if(!vmini->pde) {
         printk(KERN_INFO "Error creating proc entry");
         goto err;
