@@ -44,5 +44,6 @@
 #define VIRTIO_ID_VSOCK        19 /* virtio vsock transport */
 #define VIRTIO_ID_CRYPTO       20 /* virtio crypto */
 #define VIRTIO_ID_MINI         21 /* virtio mini */
+#define VIRTIO_ID_SKELETON     22
 
 #endif /* _LINUX_VIRTIO_IDS_H */

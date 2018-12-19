@@ -76,6 +76,7 @@ static const QDevAlias qdev_alias_table[] = {
     { "virtio-scsi-pci", "virtio-scsi", QEMU_ARCH_ALL & ~QEMU_ARCH_S390X },
     { "virtio-serial-ccw", "virtio-serial", QEMU_ARCH_S390X },
     { "virtio-serial-pci", "virtio-serial", QEMU_ARCH_ALL & ~QEMU_ARCH_S390X },
+    { "virtio-skeleton-pci", "virtio-skeleton", QEMU_ARCH_ALL & ~QEMU_ARCH_S390X },
     { "virtio-tablet-ccw", "virtio-tablet", QEMU_ARCH_S390X },
     { "virtio-tablet-pci", "virtio-tablet", QEMU_ARCH_ALL & ~QEMU_ARCH_S390X },
     { }

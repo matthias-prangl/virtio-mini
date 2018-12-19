@@ -2688,6 +2688,49 @@ static const TypeInfo virtio_mini_pci_info = {
     .instance_init = virtio_mini_initfn,
     .class_init = virtio_mini_pci_class_init,
 };
+
+static void virtio_skeleton_pci_realize(VirtIOPCIProxy *vpci_dev, Error **errp) {
+    VirtIOSkeletonPCI *vskel = VIRTIO_SKELETON_PCI(vpci_dev);
+    DeviceState *vdev = DEVICE(&vskel->vdev);
+    Error *err = NULL;
+
+    qdev_set_parent_bus(vdev, BUS(&vpci_dev->bus));
+    object_property_set_bool(OBJECT(vdev), true, "realized", &err);
+
+    if(err) {
+        error_propagate(errp, err);
+    }
+}
+
+static void virtio_skeleton_pci_class_init(ObjectClass *oc, void *data) {
+    DeviceClass *dc = DEVICE_CLASS(oc);
+    VirtioPCIClass *pcic = VIRTIO_PCI_CLASS(oc);
+    PCIDeviceClass *pcidevc = PCI_DEVICE_CLASS(oc);
+
+    pcic->realize = virtio_skeleton_pci_realize;
+    set_bit(DEVICE_CATEGORY_MISC, dc->categories);
+
+    /* set appropriate IDs, PCI_VENDOR_ID_REDHAT_QUMRANET is 0x1af4 */
+    pcidevc->vendor_id = PCI_VENDOR_ID_REDHAT_QUMRANET;
+    pcidevc->device_id = PCI_DEVICE_ID_VIRTIO_SKELETON;
+    pcidevc->revision = VIRTIO_PCI_ABI_VERSION;
+    pcidevc->class_id = PCI_CLASS_OTHERS;
+}
+
+static void virtio_skeleton_pci_initfn(Object *obj) {
+    VirtIOSkeletonPCI *dev = VIRTIO_SKELETON_PCI(obj);
+    virtio_instance_init_common(obj, &dev->vdev, sizeof(dev->vdev), TYPE_VIRTIO_SKELETON);
+}
+
+static const TypeInfo virtio_skeleton_pci_info = {
+    .name = TYPE_VIRTIO_SKELETON_PCI,
+    .parent = TYPE_VIRTIO_PCI,
+    .instance_size = sizeof(VirtIOSkeletonPCI),
+    .instance_init = virtio_skeleton_pci_initfn,
+    .class_init = virtio_skeleton_pci_class_init
+};
+
+
 #endif
 
 /* virtio-pci-bus */
@@ -2770,6 +2813,8 @@ static void virtio_pci_register_types(void)
 #endif
 #ifdef CONFIG_VIRTIO_MINI
     type_register_static(&virtio_mini_pci_info);
+        type_register_static(&virtio_skeleton_pci_info);
+
 #endif
 }
 

@@ -26,6 +26,7 @@
 #include "hw/virtio/virtio-input.h"
 #include "hw/virtio/virtio-gpu.h"
 #include "hw/virtio/virtio-crypto.h"
+#include "hw/virtio/virtio-skeleton.h"
 
 #ifdef CONFIG_VIRTIO_MINI
 #include "hw/virtio/virtio-mini.h"
@@ -63,6 +64,7 @@ typedef struct VirtIOGPUPCI VirtIOGPUPCI;
 typedef struct VHostVSockPCI VHostVSockPCI;
 typedef struct VirtIOCryptoPCI VirtIOCryptoPCI;
 typedef struct VirtIOMiniPCI VirtIOMiniPCI;
+typedef struct VirtIOSkeletonPCI VirtIOSkeletonPCI;
 
 /* virtio-pci-bus */
 
@@ -439,3 +441,10 @@ struct VirtIOMiniPCI {
     VirtIOMini vdev;
 };
 #endif
+
+#define TYPE_VIRTIO_SKELETON_PCI "virtio-skeleton-pci"
+#define VIRTIO_SKELETON_PCI(obj) OBJECT_CHECK(VirtIOSkeletonPCI, (obj), TYPE_VIRTIO_SKELETON_PCI)
+struct VirtIOSkeletonPCI {
+    VirtIOPCIProxy parent_obj;
+    VirtIOSkeleton vdev;
+};
