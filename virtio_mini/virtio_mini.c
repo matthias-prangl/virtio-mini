@@ -13,36 +13,43 @@ static ssize_t virtio_mini_read(struct file *fil, char *buf, size_t count, loff_
     char *rcv_buf; 
     struct scatterlist sg;
     struct virtio_mini_device *vmini = fil->private_data;
+
     if(vmini->buffers < 1) {
-        printk(KERN_INFO "no buffers used!");
-        return -1;
+        printk(KERN_INFO "all buffers read!");
+        return 0;
     }
 
     rcv_buf = kzalloc(vmini->buf_lens[vmini->buffers - 1], GFP_KERNEL);
     if(!rcv_buf) {
-        return -1;
+        return ENOMEM;
     }
+
+    init_completion(&vmini->data_ready);
+
     sg_init_one(&sg, rcv_buf, vmini->buf_lens[vmini->buffers - 1]);
     virtqueue_add_inbuf(vmini->vq_rx, &sg, 1, rcv_buf, GFP_KERNEL);
     virtqueue_kick(vmini->vq_rx);
-    return 0;
+
+    wait_for_completion(&vmini->data_ready);
+    memcpy(buf, vmini->read_data, vmini->buf_lens[vmini->buffers]);
+    return vmini->buf_lens[vmini->buffers];
 }
 
 static ssize_t virtio_mini_write(struct file* fil, const char *buf, size_t count, loff_t *offp) {
-    char *to_send;
+    void *to_send;
     struct scatterlist sg;
     struct virtio_mini_device *vmini = fil->private_data;
-    if(vmini->buffers > 8) {
+    if(vmini->buffers >= VIRTIO_MINI_BUFFERS) {
         printk(KERN_INFO "all buffers used!");
-        return -1;
+        return ENOSPC;
     }
-    
-    to_send = kzalloc(count, GFP_KERNEL);
+
+    to_send = kmalloc(count, GFP_KERNEL);
     if(!to_send) {
         return 1;
     }
-    //why is buf[count] not \0?
-    memcpy(to_send, buf, count - 1);
+
+    memcpy(to_send, buf, count);
     sg_init_one(&sg, to_send, count);
     vmini->buf_lens[vmini->buffers++] = count;
 
@@ -60,12 +67,17 @@ void virtio_mini_outbuf_cb(struct virtqueue *vq) {
 
 void virtio_mini_inbuf_cb(struct virtqueue *vq) {
     int len;
-    char *buf;
     struct virtio_mini_device *vmini = vq->vdev->priv;
-    buf = kzalloc(vmini->buf_lens[vmini->buffers - 1], GFP_KERNEL);
-    buf = virtqueue_get_buf(vq, &len);
+    vmini->read_data = kzalloc(vmini->buf_lens[vmini->buffers - 1], GFP_KERNEL);
+    if(!vmini->read_data) {
+        //clear the buffer anyway
+        virtqueue_get_buf(vq, &len);
+        return;
+    }
+    vmini->read_data = virtqueue_get_buf(vq, &len);
     vmini->buffers--;
-    printk(KERN_INFO "received: %s", buf);
+    complete(&vmini->data_ready);
+    printk(KERN_INFO "Received %i bytes", len);
 }
 
 /* assign one virtqueue for transmitting and one for receiving data */
@@ -128,6 +140,8 @@ int probe_virtio_mini(struct virtio_device *vdev) {
 void remove_virtio_mini (struct virtio_device *vdev) {
     struct virtio_mini_device *vmini = vdev->priv;
     proc_remove(vmini->pde);
+    complete(&vmini->data_ready);
+    kfree(vmini->read_data);
     vdev->config->reset(vdev);
     vdev->config->del_vqs(vdev);
     kfree(vdev->priv);

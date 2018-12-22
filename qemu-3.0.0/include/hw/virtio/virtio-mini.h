@@ -13,7 +13,7 @@ typedef struct VirtIOMini {
     VirtIODevice parent_obj;
     VirtQueue *vq_tx;
     VirtQueue *vq_rx;
-    char **rcv_bufs;
+    void *rcv_bufs[VIRTIO_MINI_BUFFERS];
     unsigned int rcv_count;
 } VirtIOMini;
 

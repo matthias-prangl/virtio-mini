@@ -1,10 +1,12 @@
 #include <linux/proc_fs.h>
 #include <linux/virtio.h>
+#include <linux/completion.h>
 
 #ifndef VIRTIO_ID_MINI
 #define VIRTIO_ID_MINI 21
 #endif
 
+#define VIRTIO_MINI_BUFFERS 1024
 #define VIRTIO_MINI_STRING "virtio-mini"
 
 MODULE_AUTHOR("Matthias Prangl");
@@ -29,7 +31,9 @@ struct virtio_mini_device {
     struct proc_dir_entry *pde;
     /* store length of last sent message */
     unsigned int buffers;
-    unsigned int buf_lens[8];
+    unsigned int buf_lens[VIRTIO_MINI_BUFFERS];
+    void *read_data;
+    struct completion data_ready;
 };
 
 static int virtio_mini_open(struct inode *inode, struct  file *file);

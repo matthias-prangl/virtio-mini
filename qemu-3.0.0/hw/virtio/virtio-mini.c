@@ -46,7 +46,7 @@ static void virtio_mini_handle_outbuf(VirtIODevice *vdev, VirtQueue *vq) {
     vqe = virtqueue_pop(vq, sizeof(VirtQueueElement));
     vmini->rcv_bufs[vmini->rcv_count] = malloc(vqe->out_sg->iov_len);
     iov_to_buf(vqe->out_sg, vqe->out_num, 0, vmini->rcv_bufs[vmini->rcv_count], vqe->out_sg->iov_len);
-    virtio_mini_print("received: %s", vmini->rcv_bufs[vmini->rcv_count]);
+    virtio_mini_print("received: %li bytes", vqe->out_sg->iov_len);
     vmini->rcv_count++;
     virtqueue_push(vq, vqe, 0);
     virtio_notify(vdev, vq);
@@ -70,10 +70,11 @@ static void virtio_mini_handle_inbuf(VirtIODevice *vdev, VirtQueue *vq) {
     }
     vqe = virtqueue_pop(vq, sizeof(VirtQueueElement));
 
-    iov_from_buf(vqe->in_sg, vqe->in_num, 0, vmini->rcv_bufs[last_buf], strlen(vmini->rcv_bufs[last_buf]));
+    iov_from_buf(vqe->in_sg, vqe->in_num, 0, vmini->rcv_bufs[last_buf], vqe->in_sg->iov_len);
     vmini->rcv_count--;
     virtqueue_push(vq, vqe, vqe->in_sg->iov_len);
     virtio_notify(vdev, vq);
+    g_free(vmini->rcv_bufs[last_buf]);
     g_free(vqe);
     return;
 }
@@ -82,14 +83,17 @@ static void virtio_mini_device_realize(DeviceState *dev, Error **errp) {
     VirtIODevice *vdev = VIRTIO_DEVICE(dev);
     VirtIOMini *vmin = VIRTIO_MINI(dev);
     virtio_init(vdev, "virtio-mini", VIRTIO_ID_MINI, 0);
-    vmin->vq_rx = virtio_add_queue(vdev, 8, virtio_mini_handle_outbuf);
-    vmin->vq_tx = virtio_add_queue(vdev, 8, virtio_mini_handle_inbuf);
-    vmin->rcv_bufs = malloc(8 * sizeof(char*));
+    vmin->vq_rx = virtio_add_queue(vdev, 64, virtio_mini_handle_outbuf);
+    vmin->vq_tx = virtio_add_queue(vdev, 64, virtio_mini_handle_inbuf);
     vmin->rcv_count = 0;
 }
 
 static void virtio_mini_device_unrealize(DeviceState *dev, Error **errp) {
     VirtIODevice *vdev = VIRTIO_DEVICE(dev);
+    VirtIOMini *vmini = VIRTIO_MINI(dev);
+    for(int i = 0; i < vmini->rcv_count; i++) {
+        g_free(vmini->rcv_bufs[i]);
+    }
     virtio_cleanup(vdev);
 }
 
