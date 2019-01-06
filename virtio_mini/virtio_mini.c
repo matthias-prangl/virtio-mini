@@ -24,19 +24,18 @@ static ssize_t virtio_mini_read(struct file *fil, char *buf, size_t count, loff_
         return ENOMEM;
     }
 
-    init_completion(&vmini->data_ready);
-
     sg_init_one(&sg, rcv_buf, vmini->buf_lens[vmini->buffers - 1]);
     virtqueue_add_inbuf(vmini->vq_rx, &sg, 1, rcv_buf, GFP_KERNEL);
     virtqueue_kick(vmini->vq_rx);
 
     wait_for_completion(&vmini->data_ready);
     memcpy(buf, vmini->read_data, vmini->buf_lens[vmini->buffers]);
+    kfree(rcv_buf);
     return vmini->buf_lens[vmini->buffers];
 }
 
+void *to_send;
 static ssize_t virtio_mini_write(struct file* fil, const char *buf, size_t count, loff_t *offp) {
-    void *to_send;
     struct scatterlist sg;
     struct virtio_mini_device *vmini = fil->private_data;
     if(vmini->buffers >= VIRTIO_MINI_BUFFERS) {
@@ -62,18 +61,13 @@ static ssize_t virtio_mini_write(struct file* fil, const char *buf, size_t count
 void virtio_mini_outbuf_cb(struct virtqueue *vq) {
     int len;
     virtqueue_get_buf(vq, &len);
+    kfree(to_send);
     return;
 }
 
 void virtio_mini_inbuf_cb(struct virtqueue *vq) {
     int len;
     struct virtio_mini_device *vmini = vq->vdev->priv;
-    vmini->read_data = kzalloc(vmini->buf_lens[vmini->buffers - 1], GFP_KERNEL);
-    if(!vmini->read_data) {
-        //clear the buffer anyway
-        virtqueue_get_buf(vq, &len);
-        return;
-    }
     vmini->read_data = virtqueue_get_buf(vq, &len);
     vmini->buffers--;
     complete(&vmini->data_ready);
@@ -120,6 +114,8 @@ int probe_virtio_mini(struct virtio_device *vdev) {
     }
     vmini->buffers = 0;
 
+    init_completion(&vmini->data_ready);
+
     /* create a proc entry named "virtio-mini-<bus_idx>" 
     proc_dir_entry data pointer points to associated virtio_mini_device 
     allows access to virtqueues from defined file_operations functions */
@@ -141,7 +137,6 @@ void remove_virtio_mini (struct virtio_device *vdev) {
     struct virtio_mini_device *vmini = vdev->priv;
     proc_remove(vmini->pde);
     complete(&vmini->data_ready);
-    kfree(vmini->read_data);
     vdev->config->reset(vdev);
     vdev->config->del_vqs(vdev);
     kfree(vdev->priv);
