@@ -1,4 +1,5 @@
 #include <linux/module.h>
+#include <linux/uaccess.h>
 #include <linux/scatterlist.h>
 #include <linux/virtio_config.h>
 #include "virtio_mini.h"
@@ -11,6 +12,7 @@ static int virtio_mini_open(struct inode *inode, struct  file *file) {
 
 static ssize_t virtio_mini_read(struct file *fil, char *buf, size_t count, loff_t *offp) {
     char *rcv_buf; 
+    unsigned long res;
     struct scatterlist sg;
     struct virtio_mini_device *vmini = fil->private_data;
 
@@ -29,7 +31,12 @@ static ssize_t virtio_mini_read(struct file *fil, char *buf, size_t count, loff_
     virtqueue_kick(vmini->vq_rx);
 
     wait_for_completion(&vmini->data_ready);
-    memcpy(buf, vmini->read_data, vmini->buf_lens[vmini->buffers]);
+    res = copy_to_user(buf, vmini->read_data, vmini->buf_lens[vmini->buffers]);
+    if(res != 0) {
+        printk(KERN_INFO "Could not read %lu bytes!", res);
+        /* update length to actual number of bytes read */
+        vmini->buf_lens[vmini->buffers] = vmini->buf_lens[vmini->buffers] - res;
+    }
     kfree(rcv_buf);
     return vmini->buf_lens[vmini->buffers];
 }
@@ -37,6 +44,7 @@ static ssize_t virtio_mini_read(struct file *fil, char *buf, size_t count, loff_
 void *to_send;
 static ssize_t virtio_mini_write(struct file* fil, const char *buf, size_t count, loff_t *offp) {
     struct scatterlist sg;
+    unsigned long res;
     struct virtio_mini_device *vmini = fil->private_data;
     if(vmini->buffers >= VIRTIO_MINI_BUFFERS) {
         printk(KERN_INFO "all buffers used!");
@@ -47,8 +55,12 @@ static ssize_t virtio_mini_write(struct file* fil, const char *buf, size_t count
     if(!to_send) {
         return 1;
     }
-
-    memcpy(to_send, buf, count);
+    res = copy_from_user(to_send, buf, count);
+    if(res != 0) {
+        printk(KERN_INFO "Could not write %lu bytes!", res);
+        /* update count to actual number of bytes written */
+        count = count - res;
+    }
     sg_init_one(&sg, to_send, count);
     vmini->buf_lens[vmini->buffers++] = count;
 
