@@ -11,9 +11,6 @@ static int virtio_mini_open(struct inode *inode, struct  file *file) {
 }
 
 static ssize_t virtio_mini_read(struct file *fil, char *buf, size_t count, loff_t *offp) {
-    char *rcv_buf; 
-    unsigned long res;
-    struct scatterlist sg;
     struct virtio_mini_device *vmini = fil->private_data;
 
     if(vmini->buffers < 1) {
@@ -21,17 +18,18 @@ static ssize_t virtio_mini_read(struct file *fil, char *buf, size_t count, loff_
         return 0;
     }
 
-    rcv_buf = kzalloc(vmini->buf_lens[vmini->buffers - 1], GFP_KERNEL);
+    char *rcv_buf = kzalloc(vmini->buf_lens[vmini->buffers - 1], GFP_KERNEL);
     if(!rcv_buf) {
         return ENOMEM;
     }
 
+    struct scatterlist sg;
     sg_init_one(&sg, rcv_buf, vmini->buf_lens[vmini->buffers - 1]);
     virtqueue_add_inbuf(vmini->vq_rx, &sg, 1, rcv_buf, GFP_KERNEL);
     virtqueue_kick(vmini->vq_rx);
 
     wait_for_completion(&vmini->data_ready);
-    res = copy_to_user(buf, vmini->read_data, vmini->buf_lens[vmini->buffers]);
+    unsigned long res = copy_to_user(buf, vmini->read_data, vmini->buf_lens[vmini->buffers]);
     if(res != 0) {
         printk(KERN_INFO "Could not read %lu bytes!", res);
         /* update length to actual number of bytes read */
@@ -43,9 +41,8 @@ static ssize_t virtio_mini_read(struct file *fil, char *buf, size_t count, loff_
 
 void *to_send;
 static ssize_t virtio_mini_write(struct file* fil, const char *buf, size_t count, loff_t *offp) {
-    struct scatterlist sg;
-    unsigned long res;
     struct virtio_mini_device *vmini = fil->private_data;
+
     if(vmini->buffers >= VIRTIO_MINI_BUFFERS) {
         printk(KERN_INFO "all buffers used!");
         return ENOSPC;
@@ -55,12 +52,15 @@ static ssize_t virtio_mini_write(struct file* fil, const char *buf, size_t count
     if(!to_send) {
         return 1;
     }
-    res = copy_from_user(to_send, buf, count);
+
+    unsigned long res = copy_from_user(to_send, buf, count);
     if(res != 0) {
         printk(KERN_INFO "Could not write %lu bytes!", res);
         /* update count to actual number of bytes written */
         count = count - res;
     }
+
+    struct scatterlist sg;
     sg_init_one(&sg, to_send, count);
     vmini->buf_lens[vmini->buffers++] = count;
 
@@ -73,6 +73,7 @@ static ssize_t virtio_mini_write(struct file* fil, const char *buf, size_t count
 void virtio_mini_outbuf_cb(struct virtqueue *vq) {
     int len;
     virtqueue_get_buf(vq, &len);
+    /* free sent data */
     kfree(to_send);
     return;
 }
@@ -91,9 +92,8 @@ int virtio_mini_assign_virtqueue(struct virtio_mini_device *vmini) {
     const char *names[] = { "virtio-mini-tx", "virtio-mini-rx" };
     vq_callback_t *callbacks[] = { virtio_mini_outbuf_cb, virtio_mini_inbuf_cb };
     struct virtqueue *vqs[2];
-    int err;
 
-    err = virtio_find_vqs(vmini->vdev, 2, vqs, callbacks, names, NULL);
+    int err = virtio_find_vqs(vmini->vdev, 2, vqs, callbacks, names, NULL);
     if(err) {
         return err;
     }
@@ -103,13 +103,11 @@ int virtio_mini_assign_virtqueue(struct virtio_mini_device *vmini) {
 }
 
 int probe_virtio_mini(struct virtio_device *vdev) {
-    struct virtio_mini_device *vmini;
-    /* virtio-mini(12) + bus index (7) */
-    char proc_name[20];
-    int err;
     printk(KERN_INFO "virtio-mini device found\n");
+    
+    struct virtio_mini_device *vmini = kzalloc(sizeof(struct virtio_mini_device), GFP_KERNEL);
 
-    vmini = kzalloc(sizeof(struct virtio_mini_device), GFP_KERNEL);
+    int err;
     if(vmini == NULL) {
         err = ENOMEM;
         goto err;
@@ -128,6 +126,8 @@ int probe_virtio_mini(struct virtio_device *vdev) {
 
     init_completion(&vmini->data_ready);
 
+    /* virtio-mini(12) + bus index (7) */
+    char proc_name[20];
     /* create a proc entry named "virtio-mini-<bus_idx>" 
     proc_dir_entry data pointer points to associated virtio_mini_device 
     allows access to virtqueues from defined file_operations functions */
