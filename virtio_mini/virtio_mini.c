@@ -39,7 +39,6 @@ static ssize_t virtio_mini_read(struct file *fil, char *buf, size_t count, loff_
     return vmini->buf_lens[vmini->buffers];
 }
 
-void *to_send;
 static ssize_t virtio_mini_write(struct file* fil, const char *buf, size_t count, loff_t *offp) {
     struct virtio_mini_device *vmini = fil->private_data;
 
@@ -48,7 +47,7 @@ static ssize_t virtio_mini_write(struct file* fil, const char *buf, size_t count
         return ENOSPC;
     }
 
-    to_send = kmalloc(count, GFP_KERNEL);
+    void *to_send = kmalloc(count, GFP_KERNEL);
     if(!to_send) {
         return 1;
     }
@@ -72,9 +71,11 @@ static ssize_t virtio_mini_write(struct file* fil, const char *buf, size_t count
 /* host has acknowledged the message; consume buffer */
 void virtio_mini_outbuf_cb(struct virtqueue *vq) {
     int len;
-    virtqueue_get_buf(vq, &len);
+    void *buf = virtqueue_get_buf(vq, &len);
     /* free sent data */
-    kfree(to_send);
+    if(buf) {
+        kfree(buf);
+    }
     return;
 }
 
